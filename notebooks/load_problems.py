@@ -2,6 +2,7 @@ import numpy
 import pandas
 from sklearn.cross_validation import train_test_split
 from sklearn.feature_extraction.text import CountVectorizer
+from itertools import combinations
 
 def load_problem_flight(large=False, convert_to_ints=False):
     '''
@@ -25,13 +26,24 @@ def load_problem_flight(large=False, convert_to_ints=False):
     testX  = testX.drop('dep_delayed_15min', axis=1)
     if convert_to_ints:
         categoricals = ['Month', 'DayofMonth', 'DayOfWeek', 'UniqueCarrier', 'Origin', 'Dest',]
-        continous = ['DepTime', 'Distance']
+        continous = ['Distance']
         
         trainX, testX = process_categorical_features(trainX, testX, columns=categoricals)
         trainX, testX = process_continuous_features(trainX, testX, columns=continous)
+
+        trainX['DepTime'] = trainX['DepTime'] // 100
+        testX['DepTime'] = testX['DepTime']   // 100
     
     return trainX, testX, trainY, testY
 
+def load_problem_flight_extended(large=False):
+    trainX, testX, trainY, testY = load_problem_flight(large=large, convert_to_ints=True)
+    for column1, column2 in combinations(['UniqueCarrier', 'Origin', 'Dest', 'DepTime'], 2):
+        new_column = column1 + '_' + column2
+        trainX[new_column] = trainX[column1] * 10000 + trainX[column2]
+        testX[new_column]  = testX[column1] * 10000 + testX[column2]
+    trainX, testX = process_categorical_features(trainX, testX, columns=trainX.columns)
+    return trainX, testX, trainY, testY    
 
 def load_problem_movielens_100k(all_features=False):
     '''Standard test dataset for recommendation systems
@@ -111,7 +123,7 @@ def preprocess_ad_problem():
             
     av_train.to_hdf('../data/ad_updated_train.hdf5', 'data')
             
-def load_problem_ad():
+def load_problem_ad(train_size=1000000, test_size=10000000):
     """
     Kaggle competition on CTR prediction: https://www.kaggle.com/c/avazu-ctr-prediction
     First use preprocess ad.
@@ -121,8 +133,8 @@ def load_problem_ad():
     data['hour'] = data['hour'] % 100
     answers = data['click'].values
     data = data.drop('click', axis=1)
-    trainX, testX, trainY, testY = train_test_split(data, answers, train_size=0.75, random_state=42)
-    return trainX, testX, trainY, testY
+    trainX, testX, trainY, testY = train_test_split(data, answers, train_size=train_size, test_size=test_size, random_state=42)
+    return trainX, testX, trainY.astype('int'), testY.astype('int')
 
 def remap(column, lookup):
     return (numpy.searchsorted(lookup, column) + 1) * numpy.in1d(column, lookup)
